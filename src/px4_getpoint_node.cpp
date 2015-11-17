@@ -13,9 +13,10 @@ ros::Publisher vel_sp_pub;
 geometry_msgs::PoseStamped currentPos,nextPos,initCirclePos;
 geometry_msgs::TwistStamped vs;
 sensor_msgs::NavSatFix currentGlobalPos;
-bool isGetpoint;
+bool isGetpoint, isGetGPSPoint;
 float speed;
-
+//radius
+int R = 6371000;
 
 // go to specific point 
 void getPoint(double x, double y,double z){
@@ -38,6 +39,16 @@ void getPoint(double x, double y,double z){
     vs.twist.linear.y = velocityV.y*0.2;
     vs.twist.linear.z = velocityV.z*0.2;
     // ROS_INFO_STREAM("getPoint1");
+    vs.header.stamp = ros::Time::now();
+    vel_sp_pub.publish(vs);
+}
+
+//GPS point
+void gotoGPSPoint(double lat, double lon){
+    double delta_x = R * (lat - currentGlobalPos.latitude) * float(3.1415926535898 / 180);
+    double delta_y = R * (lon - currentGlobalPos.longitude) * float(3.1415926535898 / 180);
+    vs.twist.linear.x = delta_x*0.1;
+    vs.twist.linear.y = -delta_y*0.1;
     vs.header.stamp = ros::Time::now();
     vel_sp_pub.publish(vs);
 }
@@ -104,13 +115,22 @@ void sendCommand(const keyboard::Key &key){
       case 'p':
       {
       	isGetpoint = true;
+      	isGetGPSPoint = false;
       	ROS_INFO_STREAM("get to point 10 10 3");
               break;
+      }
+      case 'g':
+      {
+      	isGetGPSPoint = true;
+      	isGetpoint = false;
+      	ROS_INFO_STREAM("get to GPS point");
+      	break;
       }
       case 'h':
       {
         // turn to manual mode
         isGetpoint = false;
+        isGetGPSPoint =false;
         vs.twist.linear.x = 0;
         vs.twist.linear.y = 0;
         vs.twist.linear.z = 0;
@@ -149,6 +169,7 @@ int main(int argc, char **argv){
   ros::Subscriber localPositionSubsciber = nodeHandle.subscribe("/mavros/local_position/local", 10, localPositionReceived);
   ros::Subscriber globalPositionSubsciber =  nodeHandle.subscribe("/mavros/global_position/raw/fix", 10, globalPositionReceived);
   isGetpoint = false;
+  isGetGPSPoint = false;
   speed = 0.2;
 //ros rate 
   ros::Rate loop_rate(10.0);
@@ -158,18 +179,21 @@ int main(int argc, char **argv){
 
       vs.header.seq++;
       //GPS topic 
-      ROS_INFO_STREAM("GPS longitude" << currentGlobalPos.longitude);
-      ROS_INFO_STREAM("GPS longitude" << currentGlobalPos.latitude);
-      ROS_INFO_STREAM("GPS longitude" << currentGlobalPos.altitude);
+      // ROS_INFO_STREAM("GPS longitude" << currentGlobalPos.longitude);
+      // ROS_INFO_STREAM("GPS longitude" << currentGlobalPos.latitude);
+      // ROS_INFO_STREAM("GPS longitude" << currentGlobalPos.altitude);
 
-      if(!isGetpoint){
+      if((!isGetpoint) && (!isGetGPSPoint)){
 
         vs.header.stamp = ros::Time::now();
         //ROS_INFO_STREAM("send ps" << ps);
         vel_sp_pub.publish(vs);
-      } else if(isGetpoint){
-        getPoint(10,10,3);
-        // ROS_INFO_STREAM("getpoint");
+      }else if(isGetGPSPoint) {
+         gotoGPSPoint(55.7530147,37.6273584);
+         ROS_INFO_STREAM("GPS");
+      }else if(isGetpoint){
+          getPoint(10,10,3);
+          ROS_INFO_STREAM("local position");
       }
     ros::spinOnce();
 
